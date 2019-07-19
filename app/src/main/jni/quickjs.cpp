@@ -282,7 +282,11 @@ JSValue java_invoke(JSContext *ctx, JSValueConst this_val,
                 }
                 case JS_TAG_BOOL: {
                     jboolean boolean = JS_ToBool(ctx, temp);
-                    env->SetObjectArrayElement(array, i - 1, reinterpret_cast<jobject>(boolean));
+                    jclass doublec = env->FindClass("java/lang/Boolean");
+                    jmethodID newd = env->GetMethodID(doublec, "<init>", "(Z)V");
+                    jobject dobj = env->NewObject(doublec, newd, boolean);
+                    checkError(env, ctx);
+                    env->SetObjectArrayElement(array, i - 1, dobj);
                     break;
                 }
                 case JS_TAG_FLOAT64: {
@@ -302,7 +306,6 @@ JSValue java_invoke(JSContext *ctx, JSValueConst this_val,
                     jclass intc = env->FindClass("java/lang/Integer");
                     jmethodID newi = env->GetMethodID(intc, "<init>", "(I)V");
                     JS_ToInt32(ctx, &jint1, temp);
-
                     jobject iobj = env->NewObject(intc, newi, jint1);
 
                     checkError(env, ctx);
@@ -313,7 +316,7 @@ JSValue java_invoke(JSContext *ctx, JSValueConst this_val,
                 }
                 case JS_TAG_OBJECT: {
                     jobject *jobj = checkJavaObject(ctx, temp);
-                    env->SetObjectArrayElement(array, i, *jobj);
+                    env->SetObjectArrayElement(array, i - 1, *jobj);
                     break;
                 }
             }
@@ -466,11 +469,9 @@ static void Activity_init(JSContext *context, JNIEnv *jniEnv) {
     }
 
     if (call_method == NULL) {
-        call_method = (jniEnv)->GetStaticMethodID(Api_class, "callStaticMethod",
+        call_method = (jniEnv)->GetStaticMethodID(Api_class, "callMethod",
                                                   "(Ljava/lang/Object;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/Object;");
         if (call_method == NULL) {
-            fprintf(stderr,
-                    "Could not find <getMessage> method in java.lang.Throwable\n");
             LOGD("call is null");
             exit(1);
         }

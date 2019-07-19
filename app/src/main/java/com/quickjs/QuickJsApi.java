@@ -1,5 +1,7 @@
 package com.quickjs;
 
+import android.util.Log;
+
 import com.quickjs.QuickJs;
 
 import java.lang.reflect.Array;
@@ -8,6 +10,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -76,14 +79,47 @@ public final class QuickJsApi {
         return obj;
     }
 
-    private static boolean CmpType(Class[] type, Object... args) {
-        for (int i = 0; i < type.length; i++) {
-            if (type[i].isAssignableFrom(args[i].getClass()))
-                return true;
+    private static Boolean toType(Class parameters[], Object[] arr) {
+        for (int i = 0; i < arr.length; i++) {
+            Class parameter = parameters[i];
+            Object mobj = arr[i];
+            Object obj = null;
+            Class<?> clazz = mobj.getClass();
+            if (parameter == byte.class && mobj instanceof Byte) {
+                obj = ((Byte) mobj).byteValue();
+            } else if (parameter == short.class && mobj instanceof Short) {
+                obj = ((Short) mobj).shortValue();
+            } else if (parameter == int.class && mobj instanceof Integer) {
+                obj = ((Integer) mobj).intValue();
+                Log.d("quickjs", String.valueOf(obj));
+            } else if (parameter == long.class && mobj instanceof Long) {
+                obj = ((Long) mobj).longValue();
+            } else if (parameter == float.class && mobj instanceof Float) {
+                obj = ((Float) mobj).floatValue();
+            } else if (parameter == double.class && mobj instanceof Double) {
+                obj = ((Double) mobj).doubleValue();
+            } else if (parameter == char.class && mobj instanceof Character) {
+                obj = ((Character) mobj).charValue();
+            } else if (parameter == boolean.class && mobj instanceof Boolean) {
+                obj = ((Boolean) mobj).booleanValue();
+            } else if (clazz.isAssignableFrom(parameter)) {
+                obj = mobj;
+            } else {
+                return false;
+            }
+            arr[i] = obj;
         }
-        return false;
+        return true;
     }
 
+    /* private static boolean CmpType(Class[] type, Object... args) {
+         for (int i = 0; i < type.length; i++) {
+             if (type[i].isAssignableFrom(args[i].getClass()))
+                 return true;
+         }
+         return false;
+     }
+ */
     public static Object objectIndex(Object obj, String searchName, int type)
             throws Exception {
         int ret = 0;
@@ -109,22 +145,25 @@ public final class QuickJsApi {
 
     }
 
+
     private static Object mInvoke(Class clz, String methodn, Object obj, Object... args) throws InvocationTargetException, IllegalAccessException {
         Method inm = null;
+        Log.d("quickjs", methodn);
         Method[] methods = clz.getMethods();
         for (Method m : methods) {
             if (methodn.equals(m.getName()) && (m.getParameterTypes().length == args.length)) {
-                if (CmpType(m.getParameterTypes(), args) || args.length == 0) {
+                if (toType(m.getParameterTypes(), args) || args.length == 0) {
+                    Log.d("qucikjs", "method find");
                     inm = m;
                     break;
                 }
             }
         }
         if (inm != null) {
-            Class clss = inm.getReturnType();
             inm.setAccessible(true);
-            return clss.cast(inm.invoke(obj, args));
+            return inm.invoke(obj, args);
         }
+        Log.d("quickjs", "is null");
         return null;
     }
 
@@ -133,7 +172,7 @@ public final class QuickJsApi {
         Constructor[] cons = clz.getConstructors();
         for (Constructor con : cons) {
             if (con.getParameterTypes().length == args.length) {
-                if (CmpType(con.getParameterTypes(), args) || args.length == 0) {
+                if (toType(con.getParameterTypes(), args) || args.length == 0) {
                     mcon = con;
                     break;
                 }
@@ -146,86 +185,86 @@ public final class QuickJsApi {
         return null;
     }
 
-    public static Object callStaticMethod(Object obj, String methodn, Object... args) throws InvocationTargetException, IllegalAccessException {
+    public static Object callMethod(Object obj, String methodn, Object... args) throws InvocationTargetException, IllegalAccessException {
         if (obj instanceof Class) {
             return mInvoke((Class) obj, methodn, null, args);
         }
         return mInvoke(obj.getClass(), methodn, obj, args);
     }
 
-    public static Object callMethod(Object obj, String cacheName, Object... arg)
-            throws Exception {
+    /* public static Object callMethod(Object obj, String cacheName, Object... arg)
+             throws Exception {
 
-        StringBuilder msgBuilder = new StringBuilder();
-        Method method = null;
+         StringBuilder msgBuilder = new StringBuilder();
+         Method method = null;
 
-        if (method != null) {
-            Object ret;
-            try {
-                if (!Modifier.isPublic(method.getModifiers()))
-                    method.setAccessible(true);
+         if (method != null) {
+             Object ret;
+             try {
+                 if (!Modifier.isPublic(method.getModifiers()))
+                     method.setAccessible(true);
 
-                ret = method.invoke(obj, arg);
-            } catch (Exception e) {
-                msgBuilder.append("  at ").append(method).append("\n  -> ").append((e.getCause() != null) ? e.getCause() : e).append("\n");
-                throw new Exception("Invalid method call.\n" + msgBuilder.toString());
-            }
+                 ret = method.invoke(obj, arg);
+             } catch (Exception e) {
+                 msgBuilder.append("  at ").append(method).append("\n  -> ").append((e.getCause() != null) ? e.getCause() : e).append("\n");
+                 throw new Exception("Invalid method call.\n" + msgBuilder.toString());
+             }
 
-            // Void function returns null
-            if (ret == null && method.getReturnType().equals(Void.TYPE))
-                return null;
+             // Void function returns null
+             if (ret == null && method.getReturnType().equals(Void.TYPE))
+                 return null;
 
-            // push result
-            return ret;
-        }
+             // push result
+             return ret;
+         }
 
-        Object objs = new Object[arg.length];
-        Method[] methods = methodCache.get(cacheName);
-        // gets method and arguments
-        for (Method m : methods) {
+         Object objs = new Object[arg.length];
+         Method[] methods = methodCache.get(cacheName);
+         // gets method and arguments
+         for (Method m : methods) {
 
-            Class[] parameters = m.getParameterTypes();
-
-
-            boolean okMethod = true;
+             Class[] parameters = m.getParameterTypes();
 
 
-            if (okMethod) {
-                method = m;
-                Object ret;
-                try {
-                    if (!Modifier.isPublic(method.getModifiers()))
-                        method.setAccessible(true);
-
-                    ret = method.invoke(obj, objs);
-                } catch (Exception e) {
-                    msgBuilder.append("  at ").append(method).append("\n  -> ").append((e.getCause() != null) ? e.getCause() : e).append("\n");
-                    continue;
-                }
-
-                // Void function returns null
-                if (ret == null && method.getReturnType().equals(Void.TYPE))
-                    return 0;
-
-                // push result
-                return ret;
-            }
-        }
-
-        if (msgBuilder.length() > 0) {
-            throw new Exception("Invalid method call.\n" + msgBuilder.toString());
-        }
-        // If method is null means there isn't one receiving the given arguments
-        for (Method m : methods) {
-            msgBuilder.append(m.toString());
-            msgBuilder.append("\n");
-        }
-        throw new Exception("Invalid method call. Invalid Parameters.\n" + msgBuilder.toString());
+             boolean okMethod = true;
 
 
-    }
+             if (okMethod) {
+                 method = m;
+                 Object ret;
+                 try {
+                     if (!Modifier.isPublic(method.getModifiers()))
+                         method.setAccessible(true);
+
+                     ret = method.invoke(obj, objs);
+                 } catch (Exception e) {
+                     msgBuilder.append("  at ").append(method).append("\n  -> ").append((e.getCause() != null) ? e.getCause() : e).append("\n");
+                     continue;
+                 }
+
+                 // Void function returns null
+                 if (ret == null && method.getReturnType().equals(Void.TYPE))
+                     return 0;
+
+                 // push result
+                 return ret;
+             }
+         }
+
+         if (msgBuilder.length() > 0) {
+             throw new Exception("Invalid method call.\n" + msgBuilder.toString());
+         }
+         // If method is null means there isn't one receiving the given arguments
+         for (Method m : methods) {
+             msgBuilder.append(m.toString());
+             msgBuilder.append("\n");
+         }
+         throw new Exception("Invalid method call. Invalid Parameters.\n" + msgBuilder.toString());
 
 
+     }
+
+ */
     /* public static int objectNewIndex(long luaState, Object obj, String searchName, int type)
              throws LuaException {
          LuaState L = LuaStateFactory.getExistingState(luaState);

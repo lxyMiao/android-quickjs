@@ -18605,7 +18605,6 @@ DUMP_BYTECODE
 #define
 DEF(id, size, n_pop, n_push, f) {
 #
-
 id, size, n_pop, n_push, OP_FMT_ ## f
 },
 #else
